@@ -1,4 +1,8 @@
 #include "gradient.h"
+#include <math.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <time.h>
 
 // The landscape matrix
 int landscape_width, landscape_height;
@@ -313,4 +317,6 @@ int main(){
     printf("\n");
     printf("Peak at %d-%d\n", landscape_peak.y, landscape_peak.x);
     printf("Number of calls made: %d\n", res);
+
+    return 0;
 }
