@@ -57,10 +57,14 @@ static void compute_gradient(const float view[VIEW_SIZE][VIEW_SIZE],
 path_point find_highest_point(void) {
     int x = 0, y = 0;
     float view[VIEW_SIZE][VIEW_SIZE];
-    int max_iterations = 1000;   // safeguard
-    int iter = 0;
-    const int STEP = VIEW_SIZE /2;
+    const int STEP = VIEW_SIZE / 2;      // base step size
 
+    //momentum variables
+    float vx = 0.0f, vy = 0.0f;
+    int flat_steps = 0;   //counter for consecutive flat steps
+
+    int max_iterations = 1000;
+    int iter = 0;
 
     while (iter < max_iterations) {
         iter++;
@@ -75,34 +79,60 @@ path_point find_highest_point(void) {
 
         float gx, gy;
         compute_gradient(view, &gx, &gy);
+        float mag = sqrt(gx*gx + gy*gy);
 
-        //momentum calculation
-        float vx = 0.0f, vy = 0.0f;
+        // PLATEAU DETECTION
+        if (mag < 0.1f) {        //if gradient is nearly zero -->possible plateau
+            flat_steps++;
+            if (flat_steps >= 2) {
+                if (fabs(vx) > 0.1f || fabs(vy) > 0.1f) {
+                    //jump forward in the direction of our momentum
+                    x += (int)(vx * VIEW_SIZE);
+                    y += (int)(vy * VIEW_SIZE);
+                } else {
+                    //no momentum yet (start on the plateau).
+                    int max_dy, max_dx;
+                    view_max_pos(view, &max_dy, &max_dx);
+                    x += (max_dx - VIEW_SIZE/2) * 2;
+                    y += (max_dy - VIEW_SIZE/2) * 2;
+                }
+                //rjeset state after a jump
+                flat_steps = 0;
+                vx = vy = 0.0f;
+                continue;
+            }
+        } else {
+            flat_steps = 0;      //there is a slope, reset plateau counter
+        }
+        
+        //MOMENTUM‑BASED MOVEMENT
+        vx = 0.8f * vx + 0.2f * gx;
+        vy = 0.8f * vy + 0.2f * gy;
 
-        vx = 0.35f * vx + 0.65f * gx;
-        vy = 0.35f * vx + 0.65f * gy;
-
-        float mag = sqrt(vx*vx + vy*vy);
-
-        if (mag > 0.1f) {
-            //step size between 1 and VIEW_SIZE(proportional to magnitude)
-            float step = mag / 10.0f;
-            if (step < 1.0f) step = 1.0f;
-            if (step > VIEW_SIZE) step = VIEW_SIZE;
-            int dx = (int)(step * gx / mag);
-            int dy = (int)(step * gy / mag);
+        float vm = sqrt(vx*vx + vy*vy);
+        if (vm > 0.1f) {
+            // Step size proportional to velocity magnitude
+            float step_scale = vm / 10.0f;
+            if (step_scale < 1.0f) step_scale = 1.0f;
+            if (step_scale > VIEW_SIZE) step_scale = VIEW_SIZE;
+            int dx = (int)(step_scale * vx / vm);
+            int dy = (int)(step_scale * vy / vm);
             x += dx;
             y += dy;
         } else {
-            //move to the highest cell in the view if gradient is tiny
+            // If velocity is tiny, move toward the maximum cell in the view
             int max_dy, max_dx;
             view_max_pos(view, &max_dy, &max_dx);
             x += max_dx - VIEW_SIZE/2;
             y += max_dy - VIEW_SIZE/2;
         }
 
-        //keep coordinates non-negative;
-        if (x < 0) x=0;
-        if(y < 0) y =0;
+        //keep coordinates non‑negative
+        if (x < 0) x = 0;
+        if (y < 0) y = 0;
     }
+
+    //if we exhaust iterations (should not happen), return best guess
+    path_point fallback = {x, y};
+    return fallback;
 }
