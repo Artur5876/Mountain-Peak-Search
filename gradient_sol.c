@@ -75,15 +75,19 @@ path_point find_highest_point(void) {
 
         float gx, gy;
         compute_gradient(view, &gx, &gy);
+        float mag = sqrt(gx*gx + gy*gy);
 
-        if (fabs(gx) > 0.01f || fabs(gy) > 0.01f) {
-            float len = sqrt(gx*gx + gy*gy);
-
-            int dx = (int)(STEP * gx / len);
-            int dy = (int)(STEP * gy / len);
+        if (mag > 0.1f) {
+            //step size between 1 and VIEW_SIZE(proportional to magnitude)
+            float step = mag / 10.0f;
+            if (step < 1.0f) step = 1.0f;
+            if (step > VIEW_SIZE) step = VIEW_SIZE;
+            int dx = (int)(step * gx / mag);
+            int dy = (int)(step * gy / mag);
             x += dx;
             y += dy;
         } else {
+            //move to the highest cell in the view if gradient is tiny
             int max_dy, max_dx;
             view_max_pos(view, &max_dy, &max_dx);
             x += max_dx - VIEW_SIZE/2;
