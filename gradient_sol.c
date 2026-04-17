@@ -75,7 +75,14 @@ path_point find_highest_point(void) {
 
         float gx, gy;
         compute_gradient(view, &gx, &gy);
-        float mag = sqrt(gx*gx + gy*gy);
+
+        //momentum calculation
+        float vx = 0.0f, vy = 0.0f;
+
+        vx = 0.35f * vx + 0.65f * gx;
+        vy = 0.35f * vx + 0.65f * gy;
+
+        float mag = sqrt(vx*vx + vy*vy);
 
         if (mag > 0.1f) {
             //step size between 1 and VIEW_SIZE(proportional to magnitude)
