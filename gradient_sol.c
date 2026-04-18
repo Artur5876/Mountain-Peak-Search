@@ -1,8 +1,14 @@
 #include "gradient.h"
 #include <math.h>
 
+//calls counter
+static int call_count =0;
+#define MAX_CALLS 900
+
 static void get_view(int y, int x, float view[VIEW_SIZE][VIEW_SIZE]) {
+    if (call_count >= MAX_CALLS) return;
     generate_view(view, y, x);
+    ++call_count;
 }
 
 static float view_max_pos(const float view[VIEW_SIZE][VIEW_SIZE],
@@ -54,6 +60,41 @@ static void compute_gradient(const float view[VIEW_SIZE][VIEW_SIZE],
     *gx = (rc ? right/rc : 0) - (lc ? left/lc : 0);
     *gy = (dc ? down/dc : 0) - (up ? up/uc : 0);
 }
+
+static void escape_plateau(int *x, int *y, float current_alt){
+    int layer = 1;
+
+    while(call_count < MAX_CALLS - 50) {
+        //iterate all over the square perimeter
+        for (int dy = -layer; dy <= layer; ++dy) {
+            for (int dx = -layer; dx <= layer; ++dx) {
+                //consider cells at the border only
+                if (abs(dy) != layer && abs(dx) != layer) continue;
+
+                //new possible coordinates calculation
+                int nx = *x + dx * VIEW_SIZE/2;
+                int ny = *y + dy * VIEW_SIZE/2;
+
+                //view centered at coordinates radious
+                float view[VIEW_SIZE][VIEW_SIZE];
+                get_view(ny, nx, view);
+
+                //find the max altitude
+                int max_dy, max_dx;
+                float max_val = view_max_pos(view, &max_dy, &max_dx);
+
+                //if we found a slope;
+                if (fabs(max_val - current_alt) > 0.1f) {
+                    *x = nx;
+                    *y = ny;
+                    return;
+                }
+            }
+        }
+        ++layer; //expanssion of the next layer;
+    } 
+}
+
 path_point find_highest_point(void) {
     int x = 0, y = 0;
     float view[VIEW_SIZE][VIEW_SIZE];
@@ -66,7 +107,7 @@ path_point find_highest_point(void) {
     int max_iterations = 1000;
     int iter = 0;
 
-    while (iter < max_iterations) {
+    while (call_count < MAX_CALLS - 5) { //leave room for peak declaration
         iter++;
         get_view(y, x, view);
 
@@ -85,20 +126,10 @@ path_point find_highest_point(void) {
         if (mag < 0.1f) {        //if gradient is nearly zero -->possible plateau
             flat_steps++;
             if (flat_steps >= 2) {
-                if (fabs(vx) > 0.1f || fabs(vy) > 0.1f) {
-                    //jump forward in the direction of our momentum
-                    x += (int)(vx * VIEW_SIZE);
-                    y += (int)(vy * VIEW_SIZE);
-                } else {
-                    //no momentum yet (start on the plateau).
-                    int max_dy, max_dx;
-                    view_max_pos(view, &max_dy, &max_dx);
-                    x += (max_dx - VIEW_SIZE/2) * 2;
-                    y += (max_dy - VIEW_SIZE/2) * 2;
-                }
-                //rjeset state after a jump
-                flat_steps = 0;
-                vx = vy = 0.0f;
+                float center = view[VIEW_SIZE/2][VIEW_SIZE/2];
+                escape_plateau(&x, &y, center);
+                flat_steps =0;
+                vx = vy = 0.0f; //reset momnentum
                 continue;
             }
         } else {
